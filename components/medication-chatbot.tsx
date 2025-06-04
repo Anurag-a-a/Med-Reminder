@@ -5,7 +5,7 @@ import { useState, useRef, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Send, Bot, User, Loader2, Pill, X, Plus, Minimize2, Maximize2, Trash2 } from "lucide-react"
+import { Send, Bot, User, Loader2, Pill, X, Plus, Minimize2, Maximize2, Trash2, AlertCircle } from "lucide-react"
 import type { Medication } from "@/types/medication"
 import { calculateNextReminder, isOverdue } from "@/lib/utils"
 
@@ -34,6 +34,7 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
   const [inputValue, setInputValue] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [isMinimized, setIsMinimized] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Load message history from localStorage
@@ -173,13 +174,55 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
     return `${hours.padStart(2, "0")}:${minutes}`
   }
 
+  // Fallback response generator when API fails
+  const generateFallbackResponse = (userMessage: string): string => {
+    const lowerMessage = userMessage.toLowerCase()
+
+    // Check if user is trying to add medication
+    if (
+      lowerMessage.includes("add") &&
+      (lowerMessage.includes("medication") || lowerMessage.includes("pill") || lowerMessage.includes("medicine"))
+    ) {
+      return "I can help you add a medication to your schedule. Please provide the medication name, dosage, frequency (times per day), and first reminder time. For example: 'Add Aspirin 100mg, 2 times per day, starting at 9:00 AM'."
+    }
+
+    // Check for medication schedule questions
+    if (
+      lowerMessage.includes("schedule") ||
+      lowerMessage.includes("when") ||
+      (lowerMessage.includes("take") && lowerMessage.includes("medication"))
+    ) {
+      if (medications.length === 0) {
+        return "You don't have any medications scheduled yet. Would you like to add one?"
+      } else {
+        return (
+          "Based on your current schedule, you have " +
+          medications.length +
+          " medications. You can view all details on your medication cards. Would you like me to help you add another medication?"
+        )
+      }
+    }
+
+    // Check for general medication questions
+    if (lowerMessage.includes("medication") || lowerMessage.includes("medicine") || lowerMessage.includes("pill")) {
+      return "I can provide general information about medications, but for specific medical advice, please consult your healthcare provider. Would you like to add a medication to your reminder schedule?"
+    }
+
+    // Default response
+    return "I'm here to help you manage your medications. I can assist with adding new medications to your schedule, provide information about your current medications, or answer general health questions. What would you like to know?"
+  }
+
   const callNvidiaAPI = async (prompt: string): Promise<string> => {
     try {
+      // Set a timeout for the fetch request
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
       const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer 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",
+          Authorization: "Bearer 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",
         },
         body: JSON.stringify({
           model: "mistralai/mistral-small-3.1-24b-instruct-2503",
@@ -197,17 +240,33 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
           temperature: 0.3,
           max_tokens: 500,
         }),
+        signal: controller.signal,
       })
+
+      // Clear the timeout
+      clearTimeout(timeoutId)
 
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`)
       }
 
       const data = await response.json()
+      setApiError(null) // Clear any previous errors
       return data.choices[0]?.message?.content || "I apologize, but I couldn't process your request. Please try again."
     } catch (error) {
       console.error("NVIDIA API Error:", error)
-      return "I'm having trouble connecting to my knowledge base right now. Please try again in a moment."
+
+      // Set specific error message based on the error
+      if (error.name === "AbortError") {
+        setApiError("Request timed out. Using offline mode.")
+      } else if (error.message?.includes("Failed to fetch")) {
+        setApiError("Network error. Using offline mode.")
+      } else {
+        setApiError("API error. Using offline mode.")
+      }
+
+      // Return a fallback response
+      return generateFallbackResponse(prompt)
     }
   }
 
@@ -346,7 +405,7 @@ Please provide a helpful, accurate response. If the question is about medication
                 <div>
                   <h3 className="text-xl font-bold">AI Medication Assistant</h3>
                   <p className="text-blue-100 text-sm font-normal">
-                    Powered by NVIDIA • {messages.length - 1} messages
+                    {apiError ? "Offline Mode" : "Powered by NVIDIA"} • {messages.length - 1} messages
                   </p>
                 </div>
               </div>
@@ -387,6 +446,16 @@ Please provide a helpful, accurate response. If the question is about medication
 
           {!isMinimized && (
             <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+              {/* API Error Banner */}
+              {apiError && (
+                <div className="bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-800 p-3">
+                  <div className="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    <p className="text-sm">{apiError} Using local responses only.</p>
+                  </div>
+                </div>
+              )}
+
               {/* Quick Questions - Fixed */}
               <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Quick questions:</p>
@@ -491,7 +560,7 @@ Please provide a helpful, accurate response. If the question is about medication
                     <div className="bg-white dark:bg-gray-700 rounded-2xl px-4 py-3 border border-gray-200 dark:border-gray-600">
                       <div className="flex items-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin text-teal-500" />
-                        <span className="text-sm text-gray-600 dark:text-gray-300">Wait a sec.. I am Analyizing...</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-300">Wait a sec.. I am Analyzing...</span>
                       </div>
                     </div>
                   </div>
@@ -520,7 +589,9 @@ Please provide a helpful, accurate response. If the question is about medication
                 </div>
 
                 <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center">
-                  🤖 Powered by NVIDIA AI • Always consult healthcare professionals for medical decisions
+                  {apiError
+                    ? "🔌 Offline mode active - Using local responses only"
+                    : "🤖 Powered by NVIDIA AI • Always consult healthcare professionals for medical decisions"}
                 </div>
               </div>
             </CardContent>
