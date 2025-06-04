@@ -152,18 +152,38 @@ export function MedicationForm({ editingMedication, errors, onSubmit, onCancel }
               <Label htmlFor="time" className="text-gray-700 dark:text-gray-200 font-medium">
                 First Reminder Time *
               </Label>
-              <Input
-                id="time"
-                type="time"
+              <Select
                 value={formData.firstReminderTime}
-                onChange={(e) => handleInputChange("firstReminderTime", e.target.value)}
-                className={`border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-blue-500 focus:ring-blue-500 ${
-                  errors.firstReminderTime ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""
-                }`}
-                required
-                aria-invalid={errors.firstReminderTime ? "true" : "false"}
-                aria-describedby={errors.firstReminderTime ? "time-error" : undefined}
-              />
+                onValueChange={(value) => handleInputChange("firstReminderTime", value)}
+              >
+                <SelectTrigger
+                  id="time"
+                  className={`border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:border-blue-500 focus:ring-blue-500 ${
+                    errors.firstReminderTime ? "border-red-500 focus:border-red-500 focus:ring-red-500" : ""
+                  }`}
+                  aria-invalid={errors.firstReminderTime ? "true" : "false"}
+                  aria-describedby={errors.firstReminderTime ? "time-error" : undefined}
+                >
+                  <SelectValue placeholder="Select time" />
+                </SelectTrigger>
+                <SelectContent className="dark:bg-gray-800 dark:border-gray-700 max-h-60 overflow-y-auto">
+                  {Array.from({ length: 24 }, (_, hour) =>
+                    Array.from({ length: 4 }, (_, quarter) => {
+                      const minutes = quarter * 15
+                      const timeValue = `${hour.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
+                      const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
+                      const ampm = hour < 12 ? "AM" : "PM"
+                      const displayTime = `${displayHour}:${minutes.toString().padStart(2, "0")} ${ampm}`
+
+                      return (
+                        <SelectItem key={timeValue} value={timeValue}>
+                          {displayTime}
+                        </SelectItem>
+                      )
+                    }),
+                  ).flat()}
+                </SelectContent>
+              </Select>
               {errors.firstReminderTime && (
                 <p className="text-red-600 dark:text-red-400 text-sm" id="time-error">
                   {errors.firstReminderTime}

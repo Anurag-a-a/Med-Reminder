@@ -43,24 +43,26 @@ export function ActionButtons({
           variant="outline"
           className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 px-4 py-3 rounded-lg shadow-sm"
           disabled={medicationsCount === 0}
+          title={medicationsCount === 0 ? "No medications to export" : "Export medications to CSV file"}
         >
           <Download className="h-5 w-5 mr-2" />
-          Export
+          Export CSV
         </Button>
         <Button
           onClick={() => fileInputRef.current?.click()}
           variant="outline"
           className="border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 px-4 py-3 rounded-lg shadow-sm"
+          title="Import medications from CSV file"
         >
           <Upload className="h-5 w-5 mr-2" />
-          Import
+          Import CSV
           <input
             type="file"
             ref={fileInputRef}
             onChange={onImport}
-            accept=".json"
+            accept=".csv"
             className="hidden"
-            aria-label="Import medications from JSON file"
+            aria-label="Import medications from CSV file"
           />
         </Button>
       </div>

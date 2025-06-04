@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import type { Medication } from "@/types/medication"
 
 interface Message {
@@ -15,7 +15,6 @@ export function useMedications() {
   const [message, setMessage] = useState<Message | null>(null)
   const [errors, setErrors] = useState<{ [key: string]: string }>({})
   const [scheduledNotifications, setScheduledNotifications] = useState<{ [key: string]: number[] }>({})
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load medications from localStorage on initial render
   useEffect(() => {
@@ -299,60 +298,498 @@ export function useMedications() {
     )
   }
 
+  // Helper function to escape CSV values
+  const escapeCSVValue = (value: string | number | boolean | null | undefined): string => {
+    if (value === null || value === undefined) return ""
+    const stringValue = String(value)
+    // If the value contains comma, quote, or newline, wrap it in quotes and escape internal quotes
+    if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n")) {
+      return `"${stringValue.replace(/"/g, '""')}"`
+    }
+    return stringValue
+  }
+
+  // Helper function to parse CSV line
+  const parseCSVLine = (line: string): string[] => {
+    const result: string[] = []
+    let current = ""
+    let inQuotes = false
+    let i = 0
+
+    while (i < line.length) {
+      const char = line[i]
+      const nextChar = line[i + 1]
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          // Escaped quote
+          current += '"'
+          i += 2
+        } else {
+          // Toggle quote state
+          inQuotes = !inQuotes
+          i++
+        }
+      } else if (char === "," && !inQuotes) {
+        // End of field
+        result.push(current)
+        current = ""
+        i++
+      } else {
+        current += char
+        i++
+      }
+    }
+
+    // Add the last field
+    result.push(current)
+    return result
+  }
+
+  // Safari-specific download function
+  const downloadForSafari = (content: string, filename: string) => {
+    try {
+      // Method 1: Try using data URL (works best in Safari)
+      const dataUrl = "data:text/csv;charset=utf-8," + encodeURIComponent(content)
+
+      // Create a temporary link
+      const link = document.createElement("a")
+      link.href = dataUrl
+      link.download = filename
+      link.style.display = "none"
+
+      // Add to DOM
+      document.body.appendChild(link)
+
+      // Trigger download with user interaction simulation
+      const clickEvent = new MouseEvent("click", {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+      })
+
+      link.dispatchEvent(clickEvent)
+
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link)
+      }, 100)
+
+      return true
+    } catch (error) {
+      console.error("Safari download method 1 failed:", error)
+      return false
+    }
+  }
+
+  // Safari fallback method
+  const safariFallbackDownload = (content: string, filename: string) => {
+    try {
+      // Create blob and object URL
+      const blob = new Blob([content], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+
+      // Open in new tab for Safari
+      const newWindow = window.open(url, "_blank")
+
+      if (newWindow) {
+        // Set a timeout to revoke the URL
+        setTimeout(() => {
+          URL.revokeObjectURL(url)
+          newWindow.close()
+        }, 1000)
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error("Safari fallback method failed:", error)
+      return false
+    }
+  }
+
+  // Safari manual download method
+  const safariManualDownload = (content: string, filename: string) => {
+    const newWindow = window.open("", "_blank")
+    if (newWindow) {
+      newWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Download ${filename}</title>
+            <meta charset="utf-8">
+            <style>
+              body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                margin: 20px; 
+                background: #f5f5f7;
+              }
+              .container {
+                max-width: 800px;
+                margin: 0 auto;
+                background: white;
+                padding: 30px;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+              }
+              .header {
+                text-align: center;
+                margin-bottom: 30px;
+                padding-bottom: 20px;
+                border-bottom: 1px solid #e5e5e7;
+              }
+              .instructions {
+                background: #007AFF;
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+                line-height: 1.6;
+              }
+              .csv-content {
+                background: #f8f9fa;
+                padding: 20px;
+                border-radius: 8px;
+                border: 1px solid #e5e5e7;
+                font-family: 'SF Mono', Monaco, monospace;
+                font-size: 12px;
+                white-space: pre-wrap;
+                word-break: break-all;
+                max-height: 400px;
+                overflow-y: auto;
+              }
+              .download-btn {
+                background: #007AFF;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                margin: 10px 5px;
+                transition: background 0.2s;
+              }
+              .download-btn:hover {
+                background: #0056CC;
+              }
+              .copy-btn {
+                background: #34C759;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                margin: 10px 5px;
+                transition: background 0.2s;
+              }
+              .copy-btn:hover {
+                background: #28A745;
+              }
+              .step {
+                margin: 15px 0;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                border-left: 4px solid #007AFF;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>💊 Pill Reminder Export</h1>
+                <p>Your medication data is ready for download</p>
+              </div>
+              
+              <div class="instructions">
+                <h3>📥 Safari Download Instructions:</h3>
+                <div class="step">
+                  <strong>Step 1:</strong> Click the "Copy CSV Data" button below to copy the data to your clipboard
+                </div>
+                <div class="step">
+                  <strong>Step 2:</strong> Open TextEdit or any text editor on your Mac
+                </div>
+                <div class="step">
+                  <strong>Step 3:</strong> Paste the data (Cmd+V) into the text editor
+                </div>
+                <div class="step">
+                  <strong>Step 4:</strong> Save the file with the name "${filename}" (make sure to include .csv extension)
+                </div>
+                <div class="step">
+                  <strong>Step 5:</strong> You can now open this file in Excel or Numbers
+                </div>
+              </div>
+
+              <div style="text-align: center; margin: 20px 0;">
+                <button class="copy-btn" onclick="copyToClipboard()">📋 Copy CSV Data</button>
+                <button class="download-btn" onclick="downloadFile()">💾 Try Download</button>
+              </div>
+
+              <h3>📄 CSV Content:</h3>
+              <div class="csv-content" id="csvContent">${content}</div>
+            </div>
+
+            <script>
+              function copyToClipboard() {
+                const csvContent = document.getElementById('csvContent').textContent;
+                navigator.clipboard.writeText(csvContent).then(function() {
+                  alert('✅ CSV data copied to clipboard! Now paste it into TextEdit and save as ${filename}');
+                }).catch(function(err) {
+                  // Fallback for older browsers
+                  const textArea = document.createElement('textarea');
+                  textArea.value = csvContent;
+                  document.body.appendChild(textArea);
+                  textArea.select();
+                  document.execCommand('copy');
+                  document.body.removeChild(textArea);
+                  alert('✅ CSV data copied to clipboard! Now paste it into TextEdit and save as ${filename}');
+                });
+              }
+
+              function downloadFile() {
+                const csvContent = document.getElementById('csvContent').textContent;
+                const dataUrl = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = '${filename}';
+                link.click();
+              }
+            </script>
+          </body>
+        </html>
+      `)
+      newWindow.document.close()
+      return true
+    }
+    return false
+  }
+
   const exportMedications = () => {
     try {
-      const dataStr = JSON.stringify(medications, null, 2)
-      const dataUri = "data:application/json;charset=utf-8," + encodeURIComponent(dataStr)
+      if (medications.length === 0) {
+        setMessage({ type: "error", text: "No medications to export" })
+        return
+      }
 
-      const exportFileDefaultName = `pill-reminder-export-${new Date().toISOString().slice(0, 10)}.json`
+      // CSV Headers
+      const headers = [
+        "Medication Name",
+        "Dosage",
+        "Frequency (times per day)",
+        "First Reminder Time",
+        "Notifications Enabled",
+        "Last Taken",
+        "Snoozed Until",
+        "Export Date",
+      ]
 
-      const linkElement = document.createElement("a")
-      linkElement.setAttribute("href", dataUri)
-      linkElement.setAttribute("download", exportFileDefaultName)
-      linkElement.click()
+      // Convert medications to CSV rows
+      const csvRows = medications.map((med) => [
+        escapeCSVValue(med.name),
+        escapeCSVValue(med.dosage),
+        escapeCSVValue(med.frequency),
+        escapeCSVValue(med.firstReminderTime),
+        escapeCSVValue(med.notificationsEnabled ? "Yes" : "No"),
+        escapeCSVValue(med.lastTaken ? med.lastTaken.toISOString() : ""),
+        escapeCSVValue(med.snoozedUntil ? med.snoozedUntil.toISOString() : ""),
+        escapeCSVValue(new Date().toISOString()),
+      ])
 
-      setMessage({ type: "success", text: "Medications exported successfully!" })
+      // Combine headers and rows
+      const csvContent = [headers.join(","), ...csvRows.map((row) => row.join(","))].join("\n")
+
+      // Add BOM for Excel compatibility
+      const BOM = "\uFEFF"
+      const finalContent = BOM + csvContent
+
+      const exportFileName = `pill-reminder-medications-${new Date().toISOString().slice(0, 10)}.csv`
+
+      // Detect Safari
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+
+      if (isSafari) {
+        // Safari-specific download sequence
+        let downloadSuccess = false
+
+        // Try method 1: Data URL download
+        downloadSuccess = downloadForSafari(finalContent, exportFileName)
+
+        if (!downloadSuccess) {
+          // Try method 2: Blob URL in new tab
+          downloadSuccess = safariFallbackDownload(finalContent, exportFileName)
+        }
+
+        if (!downloadSuccess) {
+          // Method 3: Manual download page
+          downloadSuccess = safariManualDownload(finalContent, exportFileName)
+        }
+
+        if (downloadSuccess) {
+          setMessage({
+            type: "success",
+            text: `Export ready! If download didn't start automatically, follow the instructions in the new tab.`,
+          })
+        } else {
+          setMessage({ type: "error", text: "Export failed. Please try again." })
+        }
+      } else {
+        // Standard download for non-Safari browsers
+        const blob = new Blob([finalContent], { type: "text/csv;charset=utf-8;" })
+        const url = URL.createObjectURL(blob)
+
+        const link = document.createElement("a")
+        link.href = url
+        link.download = exportFileName
+        link.style.display = "none"
+
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+
+        setTimeout(() => URL.revokeObjectURL(url), 100)
+        setMessage({ type: "success", text: `Exported ${medications.length} medications to CSV successfully!` })
+      }
     } catch (error) {
+      console.error("Export error:", error)
       setMessage({ type: "error", text: "Failed to export medications. Please try again." })
     }
   }
 
   const importMedications = (event: React.ChangeEvent<HTMLInputElement>) => {
-    try {
-      const file = event.target.files?.[0]
-      if (!file) return
+    const file = event.target.files?.[0]
+    if (!file) return
 
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        try {
-          const content = e.target?.result as string
-          const importedMedications = JSON.parse(content, (key, value) => {
-            // Convert date strings back to Date objects
-            if (key === "lastTaken" || key === "snoozedUntil") {
-              return value ? new Date(value) : undefined
-            }
-            return value
-          })
+    // Check file type
+    const fileExtension = file.name.split(".").pop()?.toLowerCase()
+    if (fileExtension !== "csv") {
+      setMessage({ type: "error", text: "Please select a CSV file." })
+      event.target.value = ""
+      return
+    }
 
-          if (Array.isArray(importedMedications)) {
-            setMedications(importedMedications)
-            setMessage({ type: "success", text: "Medications imported successfully!" })
-          } else {
-            throw new Error("Invalid format")
-          }
-        } catch (error) {
-          setMessage({ type: "error", text: "Invalid file format. Please select a valid export file." })
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string
+        const lines = content.split("\n").filter((line) => line.trim() !== "")
+
+        if (lines.length < 2) {
+          throw new Error("CSV file must contain headers and at least one medication")
         }
-      }
-      reader.readAsText(file)
-    } catch (error) {
-      setMessage({ type: "error", text: "Failed to import medications. Please try again." })
-    } finally {
-      // Reset the file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ""
+
+        // Parse headers
+        const headers = parseCSVLine(lines[0])
+        const expectedHeaders = [
+          "Medication Name",
+          "Dosage",
+          "Frequency (times per day)",
+          "First Reminder Time",
+          "Notifications Enabled",
+          "Last Taken",
+          "Snoozed Until",
+          "Export Date",
+        ]
+
+        // Validate headers (check if at least the first 4 required headers exist)
+        const requiredHeaders = expectedHeaders.slice(0, 4)
+        const hasRequiredHeaders = requiredHeaders.every((header) => headers.includes(header))
+
+        if (!hasRequiredHeaders) {
+          throw new Error(
+            "Invalid CSV format. Required columns: Medication Name, Dosage, Frequency (times per day), First Reminder Time",
+          )
+        }
+
+        // Parse medication data
+        const importedMedications: Medication[] = []
+        const errors: string[] = []
+
+        for (let i = 1; i < lines.length; i++) {
+          try {
+            const values = parseCSVLine(lines[i])
+            if (values.length < 4) continue // Skip incomplete rows
+
+            const nameIndex = headers.indexOf("Medication Name")
+            const dosageIndex = headers.indexOf("Dosage")
+            const frequencyIndex = headers.indexOf("Frequency (times per day)")
+            const timeIndex = headers.indexOf("First Reminder Time")
+            const notificationsIndex = headers.indexOf("Notifications Enabled")
+            const lastTakenIndex = headers.indexOf("Last Taken")
+            const snoozedIndex = headers.indexOf("Snoozed Until")
+
+            const name = values[nameIndex]?.trim()
+            const dosage = values[dosageIndex]?.trim()
+            const frequency = Number.parseInt(values[frequencyIndex]?.trim() || "1")
+            const firstReminderTime = values[timeIndex]?.trim()
+
+            // Validate required fields
+            if (!name || !dosage || !firstReminderTime) {
+              errors.push(`Row ${i + 1}: Missing required fields`)
+              continue
+            }
+
+            // Validate frequency
+            if (isNaN(frequency) || frequency < 1 || frequency > 10) {
+              errors.push(`Row ${i + 1}: Invalid frequency (must be 1-10)`)
+              continue
+            }
+
+            // Validate time format
+            if (!/^\d{1,2}:\d{2}$/.test(firstReminderTime)) {
+              errors.push(`Row ${i + 1}: Invalid time format (use HH:MM)`)
+              continue
+            }
+
+            const medication: Medication = {
+              id: `imported-${Date.now()}-${i}`,
+              name,
+              dosage,
+              frequency,
+              firstReminderTime,
+              notificationsEnabled:
+                notificationsIndex >= 0 ? values[notificationsIndex]?.toLowerCase() === "yes" : false,
+              lastTaken: lastTakenIndex >= 0 && values[lastTakenIndex] ? new Date(values[lastTakenIndex]) : undefined,
+              snoozedUntil: snoozedIndex >= 0 && values[snoozedIndex] ? new Date(values[snoozedIndex]) : undefined,
+            }
+
+            importedMedications.push(medication)
+          } catch (rowError) {
+            errors.push(`Row ${i + 1}: ${rowError}`)
+          }
+        }
+
+        if (importedMedications.length === 0) {
+          throw new Error("No valid medications found in the CSV file")
+        }
+
+        // Replace current medications with imported ones
+        setMedications(importedMedications)
+
+        let successMessage = `Successfully imported ${importedMedications.length} medications!`
+        if (errors.length > 0) {
+          successMessage += ` (${errors.length} rows had errors and were skipped)`
+          console.warn("Import errors:", errors)
+        }
+
+        setMessage({ type: "success", text: successMessage })
+      } catch (error) {
+        console.error("Import error:", error)
+        setMessage({
+          type: "error",
+          text: `Import failed: ${error instanceof Error ? error.message : "Invalid file format"}`,
+        })
       }
     }
+
+    reader.onerror = () => {
+      setMessage({ type: "error", text: "Failed to read the file. Please try again." })
+    }
+
+    reader.readAsText(file)
+
+    // Reset the file input
+    event.target.value = ""
   }
 
   const clearMessage = () => {

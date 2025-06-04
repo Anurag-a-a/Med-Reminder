@@ -8,8 +8,11 @@ import { MedicationGrid } from "./medication-grid"
 import { DeleteConfirmDialog } from "./delete-confirm-dialog"
 import { HelpModal } from "./help-modal"
 import { NotificationDialog } from "./notification-dialog"
+import { MedicationChatbot } from "./medication-chatbot"
 import { useMedications } from "@/hooks/use-medications"
 import { useNotifications } from "@/hooks/use-notifications"
+import { Button } from "@/components/ui/button"
+import { MessageCircle } from "lucide-react"
 import type { Medication } from "@/types/medication"
 
 export function PillReminderApp() {
@@ -18,6 +21,7 @@ export function PillReminderApp() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
   const [showNotificationDialog, setShowNotificationDialog] = useState(false)
+  const [showChatbot, setShowChatbot] = useState(false)
 
   const {
     medications,
@@ -51,6 +55,12 @@ export function PillReminderApp() {
       setShowForm(false)
       setEditingMedication(null)
     }
+    return success
+  }
+
+  const handleAddMedicationFromChatbot = (medicationData: Omit<Medication, "id" | "notificationsEnabled">) => {
+    const success = addMedication(medicationData, notificationPermission === "granted")
+    return success
   }
 
   const handleUpdateMedication = (medicationData: Omit<Medication, "id" | "notificationsEnabled">) => {
@@ -139,6 +149,23 @@ export function PillReminderApp() {
           isOpen={showNotificationDialog}
           onAllow={handleRequestNotificationPermission}
           onCancel={() => setShowNotificationDialog(false)}
+        />
+
+        {/* Floating AI Chatbot Button */}
+        <Button
+          onClick={() => setShowChatbot(true)}
+          className="fixed bottom-6 right-6 w-16 h-16 rounded-full bg-gradient-to-r from-blue-500 to-teal-500 hover:from-blue-600 hover:to-teal-600 text-white shadow-xl z-40 animate-pulse hover:animate-none transition-all duration-300"
+          aria-label="Open AI medication assistant"
+        >
+          <MessageCircle className="h-7 w-7" />
+        </Button>
+
+        {/* AI Medication Chatbot */}
+        <MedicationChatbot
+          medications={medications}
+          isOpen={showChatbot}
+          onClose={() => setShowChatbot(false)}
+          onAddMedication={handleAddMedicationFromChatbot}
         />
       </div>
     </div>
