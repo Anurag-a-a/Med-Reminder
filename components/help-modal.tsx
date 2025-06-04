@@ -24,17 +24,17 @@ export function HelpModal({ isOpen, onClose }: HelpModalProps) {
           <div className="mx-auto w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center mb-4">
             <Info className="h-6 w-6 text-blue-600 dark:text-blue-400" />
           </div>
-          <CardTitle className="text-2xl text-gray-900 dark:text-gray-100">Pill Reminder App Help</CardTitle>
+          <CardTitle className="text-2xl text-gray-900 dark:text-gray-100">Med-Reminder App Help</CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-400">
-            Learn how to use the Pill Reminder app to manage your medications
+            Learn how to use the Med-Reminder app to manage your medications
           </CardDescription>
         </CardHeader>
         <CardContent className="p-6 space-y-6">
           <div className="space-y-4">
             <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200">Getting Started</h3>
             <p className="text-gray-600 dark:text-gray-400">
-              The Pill Reminder app helps you keep track of your medications and reminds you when it's time to take
-              them. Here's how to use it:
+              The Med-Reminder app helps you keep track of your medications and reminds you when it's time to take them.
+              Here's how to use it:
             </p>
             <ol className="list-decimal pl-5 space-y-2 text-gray-600 dark:text-gray-400">
               <li>

@@ -346,6 +346,70 @@ export function useMedications() {
     return result
   }
 
+  // Detect if we're on Mac
+  const isMac = () => {
+    return typeof navigator !== "undefined" && navigator.platform.toUpperCase().indexOf("MAC") >= 0
+  }
+
+  // Mac-specific download function
+  const downloadFileOnMac = (content: string, filename: string, mimeType: string) => {
+    try {
+      // Method 1: Try using the modern approach first
+      const blob = new Blob([content], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      link.style.display = "none"
+
+      // Add to DOM, click, and remove
+      document.body.appendChild(link)
+
+      // For Mac Safari, we need to trigger the click differently
+      if (navigator.userAgent.includes("Safari") && !navigator.userAgent.includes("Chrome")) {
+        // Safari-specific approach
+        link.target = "_blank"
+        link.rel = "noopener noreferrer"
+      }
+
+      link.click()
+
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+      }, 100)
+
+      return true
+    } catch (error) {
+      console.error("Download failed:", error)
+      return false
+    }
+  }
+
+  // Fallback download method for Mac
+  const fallbackDownload = (content: string, filename: string) => {
+    try {
+      // Create a data URL
+      const dataUrl = "data:text/csv;charset=utf-8," + encodeURIComponent(content)
+
+      const link = document.createElement("a")
+      link.href = dataUrl
+      link.download = filename
+      link.style.display = "none"
+
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      return true
+    } catch (error) {
+      console.error("Fallback download failed:", error)
+      return false
+    }
+  }
+
   // Safari-specific download function
   const downloadForSafari = (content: string, filename: string) => {
     try {
@@ -498,7 +562,7 @@ export function useMedications() {
           <body>
             <div class="container">
               <div class="header">
-                <h1>💊 Pill Reminder Export</h1>
+                <h1>💊 Med-Reminder Export</h1>
                 <p>Your medication data is ready for download</p>
               </div>
               
@@ -603,7 +667,7 @@ export function useMedications() {
       const BOM = "\uFEFF"
       const finalContent = BOM + csvContent
 
-      const exportFileName = `pill-reminder-medications-${new Date().toISOString().slice(0, 10)}.csv`
+      const exportFileName = `med-reminder-medications-${new Date().toISOString().slice(0, 10)}.csv`
 
       // Detect Safari
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent)

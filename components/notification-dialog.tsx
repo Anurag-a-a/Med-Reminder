@@ -22,7 +22,7 @@ export function NotificationDialog({ isOpen, onAllow, onCancel }: NotificationDi
           </div>
           <CardTitle className="text-xl text-gray-900 dark:text-gray-100">Enable Notifications</CardTitle>
           <CardDescription className="text-gray-600 dark:text-gray-400">
-            Allow Pill Reminder to send you notifications so you never miss a dose. You can change this setting anytime
+            Allow Med-Reminder to send you notifications so you never miss a dose. You can change this setting anytime
             in your browser.
           </CardDescription>
         </CardHeader>

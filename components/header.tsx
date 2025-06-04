@@ -47,7 +47,7 @@ export function Header({ notificationPermission, onShowHelp, onShowNotificationD
         </div>
         <div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent dark:from-blue-400 dark:to-green-400">
-            Pill Reminder
+            Med-Reminder
           </h1>
           <p className="text-gray-600 dark:text-gray-300 text-lg">Stay healthy, stay on track</p>
         </div>
