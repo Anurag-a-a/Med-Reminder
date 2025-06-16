@@ -183,7 +183,36 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
       lowerMessage.includes("add") &&
       (lowerMessage.includes("medication") || lowerMessage.includes("pill") || lowerMessage.includes("medicine"))
     ) {
+      // Try to extract medication details from user input
+      const medicationMatch = lowerMessage.match(/add\s+([a-z0-9\s-]+?)\s+(\d+\s*mg|\d+\s*ml|\d+\s*tablets?)/i)
+      if (medicationMatch) {
+        const medName = medicationMatch[1].trim()
+        const dosage = medicationMatch[2].trim()
+        return `I can help you add ${medName} ${dosage} to your medication schedule. Based on your request, here are the details:
+
+Medication: ${medName}
+Dosage: ${dosage}
+Frequency: 1 time per day (you can adjust this)
+Time: 09:00 AM (you can change this)
+
+Please use the "Add to Schedule" button if these details look correct, or you can manually add the medication using the form above.`
+      }
+
       return "I can help you add a medication to your schedule. Please provide the medication name, dosage, frequency (times per day), and first reminder time. For example: 'Add Aspirin 100mg, 2 times per day, starting at 9:00 AM'."
+    }
+
+    // Check for current medications inquiry
+    if (
+      lowerMessage.includes("current") ||
+      lowerMessage.includes("my medications") ||
+      lowerMessage.includes("what medications")
+    ) {
+      if (medications.length === 0) {
+        return "You don't have any medications in your schedule yet. Would you like to add one? Just tell me the medication name, dosage, and how often you need to take it."
+      } else {
+        const medList = medications.map((med) => `• ${med.name} (${med.dosage}) - ${med.frequency}x daily`).join("\n")
+        return `Here are your current medications:\n\n${medList}\n\nWould you like to add another medication or need information about any of these?`
+      }
     }
 
     // Check for medication schedule questions
@@ -193,19 +222,53 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
       (lowerMessage.includes("take") && lowerMessage.includes("medication"))
     ) {
       if (medications.length === 0) {
-        return "You don't have any medications scheduled yet. Would you like to add one?"
+        return "You don't have any medications scheduled yet. Would you like to add one? I can help you set up a reminder schedule."
       } else {
-        return (
-          "Based on your current schedule, you have " +
-          medications.length +
-          " medications. You can view all details on your medication cards. Would you like me to help you add another medication?"
-        )
+        const todaysMeds = getTodaysMedications()
+        if (todaysMeds.length > 0) {
+          const scheduleInfo = todaysMeds
+            .map(
+              (med) =>
+                `• ${med.name}: Next dose ${med.isOverdue ? "overdue" : "at " + med.nextReminder.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+            )
+            .join("\n")
+          return `Today's medication schedule:\n\n${scheduleInfo}\n\nRemember to mark doses as taken when you take them!`
+        } else {
+          return "No medications are scheduled for the rest of today. Great job staying on track!"
+        }
       }
+    }
+
+    // Check for side effects questions
+    if (lowerMessage.includes("side effect") || lowerMessage.includes("adverse")) {
+      return "For information about medication side effects, please consult your healthcare provider, pharmacist, or check the medication's package insert. They can provide personalized advice based on your medical history and current medications."
+    }
+
+    // Check for drug interaction questions
+    if (lowerMessage.includes("interaction") || lowerMessage.includes("together")) {
+      return "Drug interactions can be serious. Please consult your healthcare provider or pharmacist about potential interactions between your medications. They have access to comprehensive interaction databases and can provide personalized advice."
+    }
+
+    // Check for dosage questions
+    if (lowerMessage.includes("dosage") || lowerMessage.includes("dose") || lowerMessage.includes("how much")) {
+      return "Medication dosages should always be determined by your healthcare provider based on your specific condition, age, weight, and other factors. Never adjust dosages without consulting your doctor or pharmacist first."
     }
 
     // Check for general medication questions
     if (lowerMessage.includes("medication") || lowerMessage.includes("medicine") || lowerMessage.includes("pill")) {
-      return "I can provide general information about medications, but for specific medical advice, please consult your healthcare provider. Would you like to add a medication to your reminder schedule?"
+      return "I can provide general information about managing your medication schedule, but for specific medical advice, please consult your healthcare provider. Would you like to add a medication to your reminder schedule or need help with your current medications?"
+    }
+
+    // Check for help requests
+    if (lowerMessage.includes("help") || lowerMessage.includes("how") || lowerMessage.includes("what can you")) {
+      return `I'm here to help you manage your medications! I can assist with:
+
+• Adding new medications to your schedule
+• Providing information about your current medications
+• Answering general health questions
+• Setting up reminder schedules
+
+What would you like help with today?`
     }
 
     // Default response
@@ -216,7 +279,7 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
     try {
       // Set a timeout for the fetch request
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15 second timeout
 
       const response = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
@@ -230,7 +293,7 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
             {
               role: "system",
               content:
-                "You are a helpful medical assistant for a pill reminder app. Provide accurate, concise medical information while always recommending users consult healthcare professionals for personalized advice. When suggesting medications to add to the app, format them clearly with: Medication: [name], Dosage: [amount], Frequency: [times per day], Time: [first dose time]. Keep responses brief and clear.",
+                "You are a helpful medical assistant for a medication reminder app. Provide accurate, concise medical information while always recommending users consult healthcare professionals for personalized advice. When suggesting medications to add to the app, format them clearly with: Medication: [name], Dosage: [amount], Frequency: [times per day], Time: [first dose time]. Keep responses brief and clear.",
             },
             {
               role: "user",
@@ -247,22 +310,40 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`)
+        // Handle specific HTTP errors
+        if (response.status === 401) {
+          throw new Error("API authentication failed")
+        } else if (response.status === 429) {
+          throw new Error("API rate limit exceeded")
+        } else if (response.status >= 500) {
+          throw new Error("API server error")
+        } else {
+          throw new Error(`API request failed with status ${response.status}`)
+        }
       }
 
       const data = await response.json()
+
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error("Invalid API response format")
+      }
+
       setApiError(null) // Clear any previous errors
-      return data.choices[0]?.message?.content || "I apologize, but I couldn't process your request. Please try again."
+      return data.choices[0].message.content || "I apologize, but I couldn't process your request. Please try again."
     } catch (error) {
       console.error("NVIDIA API Error:", error)
 
-      // Set specific error message based on the error
+      // Set specific error message based on the error type
       if (error.name === "AbortError") {
         setApiError("Request timed out. Using offline mode.")
-      } else if (error.message?.includes("Failed to fetch")) {
-        setApiError("Network error. Using offline mode.")
+      } else if (error.message?.includes("Failed to fetch") || error.message?.includes("NetworkError")) {
+        setApiError("Network connection error. Using offline mode.")
+      } else if (error.message?.includes("authentication")) {
+        setApiError("API authentication issue. Using offline mode.")
+      } else if (error.message?.includes("rate limit")) {
+        setApiError("API rate limit reached. Using offline mode.")
       } else {
-        setApiError("API error. Using offline mode.")
+        setApiError("API temporarily unavailable. Using offline mode.")
       }
 
       // Return a fallback response
