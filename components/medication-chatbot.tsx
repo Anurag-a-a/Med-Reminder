@@ -222,7 +222,7 @@ export function MedicationChatbot({ medications, isOpen, onClose, onAddMedicatio
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: "Bearer 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",
+          Authorization: "Bearer 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",
         },
         body: JSON.stringify({
           model: "mistralai/mistral-small-3.1-24b-instruct-2503",
